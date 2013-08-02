@@ -52,8 +52,7 @@
 		{
 			$alifePeer =
 				CyclicAggregateCache::create()-> //some existing memcached
-				setSummaryWeight(42)->
-				addPeer('first', new PeclMemcached("127.0.0.1", "11211"), 0)->
+				addPeer('first', new PeclMemcached("127.0.0.1", "11211"), 21)->
 				addPeer('second', new Memcached("127.0.0.1", "11211"), 21);
 			
 			$alifePeer->set('some_key', 'some_value');

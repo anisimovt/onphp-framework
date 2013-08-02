@@ -28,7 +28,7 @@
 					"there is no peer with '{$label}' label"
 				);
 
-			unset($this->peer[$label]);
+			unset($this->peers[$label]);
 
 			return $this;
 		}
@@ -44,7 +44,7 @@
 				if ($peer['object']->isAlive())
 					$this->alive = true;
 				else
-					unset($this->peers[$label]);
+					$this->dropPeer($label);
 
 			return $this->alive;
 		}

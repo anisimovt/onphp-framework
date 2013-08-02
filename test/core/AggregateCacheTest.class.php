@@ -41,17 +41,6 @@
 					setClassLevel('one', 0xb000)
 			);
 		}
-
-		public function testCyclicAggregateCache()
-		{
-			$this->doTestMemcached(
-				CyclicAggregateCache::create()->
-					setSummaryWeight(42)->
-					addPeer('first', Memcached::create(), 25)->
-					addPeer('second', PeclMemcached::create(), 1)->
-					addPeer('third', PeclMemcached::create(), 13)
-			);
-		}
 /*
  * temporary disabled. fix base cache peers first
 		public function testCompositeCyclicAggregateCache()

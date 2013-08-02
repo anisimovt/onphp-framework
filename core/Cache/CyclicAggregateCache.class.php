@@ -15,10 +15,14 @@
 	**/
 	final class CyclicAggregateCache extends BaseAggregateCache
 	{
-		const DEFAULT_SUMMARY_WEIGHT = 1000;
+		const DEFAULT_POINTS_FOR_PEER = 64;
 		
-		private $summaryWeight = self::DEFAULT_SUMMARY_WEIGHT;
 		private $sorted = false;
+		
+		private $pointCount = self::DEFAULT_POINTS_FOR_PEER;
+		
+		private $pointToPeer = array();
+		private $peerToPoint = array();
 
 		/**
 		 * @return CyclicAggregateCache
@@ -28,71 +32,98 @@
 			return new self();
 		}
 
-		public function setSummaryWeight($weight)
+		public function addPeer($label, CachePeer $peer, $weight = 1)
 		{
-			Assert::isPositiveInteger($weight);
+			Assert::isGreaterOrEqual($weight, 0);
+
+			$this->doAddPeer($label, $peer);
 			
-			$this->summaryWeight = $weight;
+			$this->peerToPoint[$label] = array();
+			
+			for ($i = 0; $i < round($this->pointCount * $weight); $i++) {
+				$point = $this->hash($label.$i);
+			
+				$this->pointToPeer[$point] = $label;
+				$this->peerToPoint[$label][] = $point;
+			}
+			
 			$this->sorted = false;
 			
 			return $this;
 		}
 
-		public function addPeer($label, CachePeer $peer, $mountPoint)
+		public function dropPeer($label)
 		{
-			Assert::isLesserOrEqual($mountPoint, $this->summaryWeight);
-			Assert::isGreaterOrEqual($mountPoint, 0);
-
-			$this->doAddPeer($label, $peer);
-
-			$this->peers[$label]['mountPoint'] = $mountPoint;
-			$this->sorted = false;
+			parent::dropPeer($label);
+			
+			foreach ($this->peerToPoint[$label] as $point)
+				unset($this->pointToPeer[$point]);
+			
+			unset($this->peerToPoint[$label]);
 			
 			return $this;
+		}
+		
+		public function getLabel($key)
+		{
+			return $this->guessLabel($key);
 		}
 
 		protected function guessLabel($key)
 		{
+			$label = null;
+			
+			while ($label = $this->getLabelByKey($key))
+				if (!$this->peers[$label]['object']->isAlive())
+					$this->checkAlive();
+				else
+					break;
+			
+			return $label;
+		}
+
+		private function getLabelByKey($key)
+		{
+			if (!$this->peers)
+				throw new RuntimeException('All peers are dead');
+			
+			if (count($this->peers) == 1)
+				return key($this->peers);
+			
 			if (!$this->sorted)
 				$this->sortPeers();
 
-			$point = hexdec(substr(sha1($key), 0, 5)) % $this->summaryWeight;
+			$point = $this->hash($key);
+		
+			while ($peer = current($this->pointToPeer)) {
+				if ($point <= key($this->pointToPeer))
+					return $peer;
 
-			$firstPeer = reset($this->peers);
-
-			while ($peer = current($this->peers)) {
-				
-				if ($point <= $peer['mountPoint'])
-					return key($this->peers);
-
-				next($this->peers);
+				next($this->pointToPeer);
 			}
-
-			if ($point <= ($firstPeer['mountPoint'] + $this->summaryWeight)) {
-				reset($this->peers);
+			
+			end($this->pointToPeer);
+			
+			if ($point > key($this->pointToPeer)) {
 				
-				return key($this->peers);
+				return reset($this->pointToPeer);
 			}
 
 			Assert::isUnreachable();
 		}
+		
+		private function hash($key)
+		{
+			return hexdec(substr(sha1($key), 0, 8));
+		}
 
 		private function sortPeers()
 		{
-			uasort($this->peers, array('self', 'comparePeers'));
+			ksort($this->pointToPeer);
 			
 			$this->sorted = true;
 			
 			return $this;
-		}
-
-		private static function comparePeers(array $first, array $second)
-		{
-			if ($first['mountPoint'] == $second['mountPoint'])
-				return 0;
-
-			 return
-				($first['mountPoint'] < $second['mountPoint']) ? -1 : 1;
 		}
 	}
 ?>
